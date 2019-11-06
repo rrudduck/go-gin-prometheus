@@ -30,19 +30,19 @@ var reqDur = &Metric{
 	ID:          "reqDur",
 	Name:        "request_duration_seconds",
 	Description: "The HTTP request latencies in seconds.",
-	Type:        "summary"}
+	Type:        "summary_vec"}
 
 var resSz = &Metric{
 	ID:          "resSz",
 	Name:        "response_size_bytes",
 	Description: "The HTTP response sizes in bytes.",
-	Type:        "summary"}
+	Type:        "summary_vec"}
 
 var reqSz = &Metric{
 	ID:          "reqSz",
 	Name:        "request_size_bytes",
 	Description: "The HTTP request sizes in bytes.",
-	Type:        "summary"}
+	Type:        "summary_vec"}
 
 var standardMetrics = []*Metric{
 	reqCnt,
@@ -86,7 +86,7 @@ type Metric struct {
 // Prometheus contains the metrics gathered by the instance and its path
 type Prometheus struct {
 	reqCnt               *prometheus.CounterVec
-	reqDur, reqSz, resSz prometheus.Summary
+	reqDur, reqSz, resSz *prometheus.SummaryVec
 	router               *gin.Engine
 	listenAddress        string
 	Ppg                  PrometheusPushGateway
@@ -330,11 +330,11 @@ func (p *Prometheus) registerMetrics(subsystem string) {
 		case reqCnt:
 			p.reqCnt = metric.(*prometheus.CounterVec)
 		case reqDur:
-			p.reqDur = metric.(prometheus.Summary)
+			p.reqDur = metric.(*prometheus.SummaryVec)
 		case resSz:
-			p.resSz = metric.(prometheus.Summary)
+			p.resSz = metric.(*prometheus.SummaryVec)
 		case reqSz:
-			p.reqSz = metric.(prometheus.Summary)
+			p.reqSz = metric.(*prometheus.SummaryVec)
 		}
 		metricDef.MetricCollector = metric
 	}
@@ -369,7 +369,7 @@ func (p *Prometheus) HandlerFunc() gin.HandlerFunc {
 		elapsed := float64(time.Since(start)) / float64(time.Second)
 		resSz := float64(c.Writer.Size())
 
-		p.reqDur.Observe(elapsed)
+		p.reqDur.WithLabelValues().Observe(elapsed)
 		url := p.ReqCntURLLabelMappingFn(c)
 		// jlambert Oct 2018 - sidecar specific mod
 		if len(p.URLLabelFromContext) > 0 {
@@ -380,8 +380,8 @@ func (p *Prometheus) HandlerFunc() gin.HandlerFunc {
 			url = u.(string)
 		}
 		p.reqCnt.WithLabelValues(status, c.Request.Method, c.HandlerName(), c.Request.Host, url).Inc()
-		p.reqSz.Observe(float64(reqSz))
-		p.resSz.Observe(resSz)
+		p.reqSz.WithLabelValues().Observe(float64(reqSz))
+		p.resSz.WithLabelValues().Observe(resSz)
 	}
 }
 
